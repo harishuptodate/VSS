@@ -5,7 +5,7 @@ type Props = {
 	id: string;
 	title?: string | null;
 	status: 'UPLOADING' | 'PROCESSING' | 'READY';
-	thumbUrl?: string | null;
+	thumbs?: (string | null)[];
 	createdAt: string | Date;
 };
 
@@ -13,9 +13,10 @@ export default function VideoCard({
 	id,
 	title,
 	status,
-	thumbUrl,
+	thumbs,
 	createdAt,
 }: Props) {
+	const [a, b, c] = (thumbs ?? []).concat([null, null, null]).slice(0, 3);
 	const statusConfig = {
 		READY: {
 			bg: 'bg-emerald-100 dark:bg-emerald-900/30',
@@ -82,12 +83,12 @@ export default function VideoCard({
 		<Link href={`/video/${id}`} className="group">
 			<div className="card overflow-hidden hover:shadow-lg transition-all duration-200 group-hover:-translate-y-1">
 				<div className="aspect-video bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 flex items-center justify-center overflow-hidden">
-					{thumbUrl ? (
-						<img
-							src={thumbUrl}
-							alt=""
-							className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-						/>
+					{thumbs ? (
+						[a,b,c].map((src, i) => (
+          src
+            ? <img key={i} src={src} alt="" className="w-full h-full object-cover" />
+            : <div key={i} className="w-full h-full bg-black/10" />
+        ))
 					) : (
 						<div className="text-center space-y-2">
 							<div className="w-12 h-12 bg-gray-200 dark:bg-gray-700 rounded-xl flex items-center justify-center mx-auto">
@@ -109,6 +110,7 @@ export default function VideoCard({
 							</span>
 						</div>
 					)}
+					
 				</div>
 				<div className="p-4">
 					<div className="flex items-start justify-between mb-3">

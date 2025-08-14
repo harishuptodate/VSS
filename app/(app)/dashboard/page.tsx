@@ -5,6 +5,7 @@ import { signThumbUrl } from '@/lib/storage';
 import UploadDrop from '@/components/UploadDrop';
 import VideoCard from '@/components/VideoCard';
 import SignOutButton from '@/components/SignOutButton';
+import DashboardRealtimeRefresher from '@/components/DashboardRealtimeRefresher';
 
 export default async function DashboardPage() {
 	const user = await requireUser();
@@ -12,7 +13,7 @@ export default async function DashboardPage() {
 	const videos = await prisma.video.findMany({
 		where: { userId: user.id },
 		orderBy: { createdAt: 'desc' },
-		include: { thumbnails: { take: 1, orderBy: { timecodeSec: 'asc' } } },
+		include: { thumbnails: { orderBy: { timecodeSec: 'asc' } } },
 	});
 
 	const items = await Promise.all(
@@ -21,14 +22,15 @@ export default async function DashboardPage() {
 			title: v.title,
 			status: v.status,
 			createdAt: v.createdAt,
-			thumbUrl: v.thumbnails[0]
-				? await signThumbUrl(v.thumbnails[0].objectPath)
-				: null,
+			thumbs: await Promise.all(
+				v.thumbnails.slice(0, 3).map( t =>  signThumbUrl(t.objectPath))
+			),
 		})),
 	);
 
 	return (
 		<main className="space-y-8">
+			<DashboardRealtimeRefresher userId={user.id} />
 			<div className="card-elevated p-6">
 				<div className="flex items-center justify-between">
 					<div className="space-y-1">

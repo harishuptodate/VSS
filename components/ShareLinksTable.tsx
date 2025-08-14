@@ -1,6 +1,9 @@
 // components/ShareLinksTable.tsx
 'use client';
+
+import { useEffect } from 'react';
 import useSWR from 'swr';
+import { supabaseClient } from '@/lib/supabaseClient';
 
 type LinkRow = {
 	id: string;
@@ -9,11 +12,72 @@ type LinkRow = {
 	expiresAt: string | null;
 	lastViewedAt: string | null;
 	createdAt: string;
+	video?: { id: string; title: string | null } | null;
 };
+
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
+function truncateLink(path: string, visible = 14) {
+	// show first N chars then ellipsis (keeps layout tidy)
+	if (path.length <= visible) return path;
+	return `${path.slice(0, visible)}…`;
+}
+
 export default function ShareLinksTable() {
-	const { data, mutate } = useSWR<LinkRow[]>('/api/links', fetcher);
+	const { data, mutate, error } = useSWR<LinkRow[]>('/api/links', fetcher, {
+		revalidateOnFocus: false,
+	});
+
+	// realtime: auto-refresh on INSERT/UPDATE
+	useEffect(() => {
+		let unsub = () => {};
+		(async () => {
+			const supa = supabaseClient();
+			const { data: userRes } = await supa.auth.getUser();
+			const userId = userRes.user?.id;
+			if (!userId) return;
+
+			const channel = supa
+				.channel(`sharelinks-${userId}`)
+				.on(
+					'postgres_changes',
+					{
+						event: 'INSERT',
+						schema: 'public',
+						table: 'ShareLink',
+						filter: `createdBy=eq.${userId}`,
+					},
+					() => mutate(),
+				)
+				.on(
+					'postgres_changes',
+					{
+						event: 'UPDATE',
+						schema: 'public',
+						table: 'ShareLink',
+						filter: `createdBy=eq.${userId}`,
+					},
+					() => mutate(),
+				)
+				.subscribe();
+
+			unsub = () => supa.removeChannel(channel);
+		})();
+
+		return () => unsub();
+	}, [mutate]);
+
+	if (error) {
+		return (
+			<div className="text-center py-8">
+				<div className="w-16 h-16 bg-red-50 dark:bg-red-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
+					<span className="text-red-600">!</span>
+				</div>
+				<p className="text-red-700 dark:text-red-300">Failed to load links.</p>
+			</div>
+		);
+	}
+
 	if (!data)
 		return (
 			<div className="text-center py-8">
@@ -37,6 +101,17 @@ export default function ShareLinksTable() {
 			</div>
 		);
 
+	async function copyToClipboard(text: string) {
+		try {
+			await navigator.clipboard.writeText(text);
+		} catch (e) {
+			console.error('copy failed', e);
+			// fallback: select & copy could be added if needed
+		}
+	}
+
+	const base = process.env.NEXT_PUBLIC_SITE_URL || '';
+
 	return (
 		<div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
 			<div className="overflow-x-auto">
@@ -55,14 +130,23 @@ export default function ShareLinksTable() {
 							<th className="p-4 text-left font-semibold text-gray-900 dark:text-white">
 								Last Access
 							</th>
+							{/* swapped: show Title column */}
 							<th className="p-4 text-left font-semibold text-gray-900 dark:text-white">
-								URL
+								Title
+							</th>
+							{/* and a compact Link cell with actions */}
+							<th className="p-4 text-left font-semibold text-gray-900 dark:text-white">
+								Link
 							</th>
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-gray-200 dark:divide-gray-700">
 						{data.map((l) => {
 							const active = !l.expiresAt || new Date(l.expiresAt) > new Date();
+							const fullUrl = `${base}/s/${l.token}`;
+							const pretty = `/s/${l.token}`;
+							const truncated = truncateLink(pretty);
+
 							return (
 								<tr
 									key={l.id}
@@ -110,11 +194,13 @@ export default function ShareLinksTable() {
 											{l.visibility}
 										</span>
 									</td>
+
 									<td className="p-4 text-gray-700 dark:text-gray-300">
 										{l.expiresAt
-											? new Date(l.expiresAt).toLocaleDateString()
+											? new Date(l.expiresAt).toLocaleString()
 											: 'Forever'}
 									</td>
+
 									<td className="p-4">
 										<span
 											className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
@@ -152,19 +238,39 @@ export default function ShareLinksTable() {
 											{active ? 'Active' : 'Expired'}
 										</span>
 									</td>
+
 									<td className="p-4 text-gray-700 dark:text-gray-300">
 										{l.lastViewedAt
-											? new Date(l.lastViewedAt).toLocaleDateString()
+											? new Date(l.lastViewedAt).toLocaleString()
 											: '-'}
 									</td>
+
+									{/* Title */}
+									<td className="p-4 text-gray-900 dark:text-gray-100">
+										{truncateLink(l.video?.title || l.video?.id || '') || '—'}
+									</td>
+
+									{/* Link cell: truncated + Copy + Open */}
 									<td className="p-4">
-										<a
-											className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline break-all transition-colors font-mono text-xs"
-											href={`/s/${l.token}`}
-											target="_blank"
-											rel="noopener noreferrer">
-											/s/{l.token}
-										</a>
+										<div className="flex items-center gap-2">
+											<span className="font-mono text-xs text-blue-700 dark:text-blue-400">
+												{truncated}
+											</span>
+											<button
+												onClick={() => copyToClipboard(fullUrl)}
+												className="px-2 py-1 text-xs border rounded hover:bg-gray-50 dark:hover:bg-gray-800"
+												aria-label="Copy link">
+												Copy
+											</button>
+											<a
+												className="px-2 py-1 text-xs border rounded hover:bg-gray-50 dark:hover:bg-gray-800"
+												href={fullUrl}
+												target="_blank"
+												rel="noopener noreferrer"
+												aria-label="Open link">
+												Open
+											</a>
+										</div>
 									</td>
 								</tr>
 							);

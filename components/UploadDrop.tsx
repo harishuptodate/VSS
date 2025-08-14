@@ -4,9 +4,17 @@ import { useRef, useState } from 'react';
 import { Upload } from 'tus-js-client';
 import { supabaseClient } from '@/lib/supabaseClient';
 
+function fmt(n: number) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`;
+  return `${(n / 1024 ** 3).toFixed(1)} GB`;
+}
+
 export default function UploadDrop() {
 	const inputRef = useRef<HTMLInputElement>(null);
 	const [progress, setProgress] = useState(0);
+	const [bytes, setBytes] = useState({ up: 0, total: 0 });
 	const [status, setStatus] = useState<'idle' | 'uploading' | 'done'>('idle');
 
 	async function startUpload(file: File) {
@@ -57,6 +65,7 @@ export default function UploadDrop() {
 				setStatus('idle');
 			},
 			onProgress: (bytesUploaded, bytesTotal) => {
+				setBytes({ up: bytesUploaded, total: bytesTotal });
 				setProgress(Math.floor((bytesUploaded / bytesTotal) * 100));
 			},
 			onSuccess: async () => {
@@ -132,13 +141,14 @@ export default function UploadDrop() {
 							{status === 'uploading' ? 'Uploading...' : 'Upload complete!'}
 						</span>
 						<span className="text-gray-500 dark:text-gray-400">
-							{progress}%
+						{fmt(bytes.up)} / {fmt(bytes.total)} ({progress}%)
 						</span>
 					</div>
 					<div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
 						<div
 							className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-300 ease-out"
 							style={{ width: `${progress}%` }}
+							
 						/>
 					</div>
 				</div>
