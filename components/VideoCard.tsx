@@ -1,6 +1,6 @@
 // components/VideoCard.tsx
 import Link from "next/link";
-
+import Image from "next/image";
 type Props = {
   id: string;
   title?: string | null;
@@ -13,7 +13,7 @@ export default function VideoCard({ id, title, status, thumbUrl, createdAt }: Pr
   return (
     <Link href={`/video/${id}`} className="block border rounded-lg overflow-hidden hover:shadow">
       <div className="aspect-video bg-black/5 flex items-center justify-center">
-        {thumbUrl ? <img src={thumbUrl} alt="" className="w-full h-full object-cover" /> : <span className="text-sm">No thumbnail yet</span>}
+        {thumbUrl ? <Image src={thumbUrl} alt="" className="w-full h-full object-cover" /> : <span className="text-sm">No thumbnail yet</span>}
       </div>
       <div className="p-3">
         <div className="flex items-center justify-between">
