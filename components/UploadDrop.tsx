@@ -4,9 +4,18 @@ import { useRef, useState } from "react";
 import { Upload } from "tus-js-client";
 import { supabaseClient } from "@/lib/supabaseClient";
 
+function fmtBytes(n: number) {
+  if (!Number.isFinite(n)) return "0 B";
+  const units = ["B","KB","MB","GB","TB"];
+  let i = 0, v = n;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(v < 10 && i > 0 ? 2 : 0)} ${units[i]}`;
+}
+
 export default function UploadDrop() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState(0);
+  const [bytes, setBytes] = useState({ up: 0, total: 0 });
   const [status, setStatus] = useState<"idle"|"uploading"|"done">("idle");
 
   async function startUpload(file: File) {
@@ -16,13 +25,14 @@ export default function UploadDrop() {
       return;
     }
     setStatus("uploading");
+    setBytes({ up: 0, total: file.size });
+    setProgress(0);
 
     const intent = await fetch("/api/uploads/intent", {
       method: "POST",
       body: JSON.stringify({ filename: file.name, type: file.type, size: file.size }),
     }).then(r => r.json());
 
-    // ✅ get USER access token
     const supa = supabaseClient();
     const { data: { session } } = await supa.auth.getSession();
     if (!session?.access_token) {
@@ -35,18 +45,18 @@ export default function UploadDrop() {
       endpoint: intent.tusEndpoint as string,
       headers: {
         authorization: `Bearer ${session.access_token}`,
-        "x-upsert": "true", // optional but recommended
+        "x-upsert": "true",
       },
-      // TUS requires metadata keys; tus-js-client will base64 values for us.
       metadata: {
         bucketName: intent.bucket,
-        objectName: intent.objectPath,
+        objectName: intent.objectPath, // name INSIDE the bucket
         contentType: file.type || "video/mp4",
         cacheControl: "3600"
       },
       retryDelays: [0, 1000, 3000, 5000],
       onError: (e) => { console.error(e); alert(e.message); setStatus("idle"); },
       onProgress: (bytesUploaded, bytesTotal) => {
+        setBytes({ up: bytesUploaded, total: bytesTotal });
         setProgress(Math.floor((bytesUploaded / bytesTotal) * 100));
       },
       onSuccess: async () => {
@@ -71,12 +81,12 @@ export default function UploadDrop() {
   return (
     <div className="space-y-4">
       <div
-        className="border-2 border-dashed rounded-xl p-6 text-center cursor-pointer"
+        className="border rounded-xl p-8 text-center cursor-pointer hover:bg-gray-50 transition"
         onClick={() => inputRef.current?.click()}
         onDragOver={(e) => e.preventDefault()}
         onDrop={onDrop}
       >
-        <p>Drag & drop a video (max size configured) or click to choose.</p>
+        <p className="text-sm text-gray-600">Drag & drop a video (max size configured) or click to choose</p>
         <input
           ref={inputRef}
           type="file"
@@ -90,11 +100,17 @@ export default function UploadDrop() {
       </div>
 
       {status !== "idle" && (
-        <div className="w-full bg-gray-200 rounded-full h-3">
-          <div className="bg-blue-500 h-3 rounded-full transition-all" style={{ width: `${progress}%` }} />
+        <div className="space-y-2">
+          <div className="flex justify-between text-xs text-gray-600">
+            <span>{fmtBytes(bytes.up)} / {fmtBytes(bytes.total)}</span>
+            <span>{progress}%</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+            <div className="bg-gray-900 h-3 rounded-full transition-all" style={{ width: `${progress}%` }} />
+          </div>
+          {status === "done" && <div className="text-emerald-600 text-sm">Upload complete. Processing…</div>}
         </div>
       )}
-      {status === "done" && <div className="text-green-600">Upload complete. Processing…</div>}
     </div>
   );
 }

@@ -53,60 +53,76 @@ export default async function VideoPage({
 }
 
 function CreateLinkForm({ videoId }: { videoId: string }) {
-	async function action(formData: FormData) {
-		'use server';
-		const visibility = String(formData.get('visibility'));
-		const preset = String(formData.get('preset'));
-		const emails = String(formData.get('emails') || '')
-			.split(',')
-			.map((s) => s.trim())
-			.filter(Boolean);
+  async function action(formData: FormData) {
+    "use server";
+    const visibility = String(formData.get("visibility"));
+    const preset = String(formData.get("preset"));
+    const emails = String(formData.get("emails") || "").split(",").map(s => s.trim()).filter(Boolean);
 
-		const { requireUser } = await import('@/lib/auth');
-		const { prisma } = await import('@/lib/prisma');
-		const { expiryFromPreset, generateToken } = await import('@/lib/links');
+    if (visibility === "PRIVATE" && emails.length === 0) {
+      throw new Error("At least one email is required for PRIVATE links.");
+    }
 
-		const user = await requireUser();
-		const token = generateToken();
-		const expiresAt = expiryFromPreset(
-			preset as '1h' | '12h' | '1d' | '30d' | 'forever',
-		);
+    const [{ requireUser }, { prisma }, { expiryFromPreset, generateToken }, { getRegisteredRecipients }, { sendPrivateShareEmail }] =
+      await Promise.all([
+        import("@/lib/auth"),
+        import("@/lib/prisma"),
+        import("@/lib/links"),
+        import("@/lib/supabaseAdmin"),
+        import("@/lib/email")
+      ]);
 
-		await prisma.shareLink.create({
-			data: {
-				token,
-				videoId,
-				createdBy: user.id,
-				visibility: visibility === 'PRIVATE' ? 'PRIVATE' : 'PUBLIC',
-				expiresAt,
-				emails: { create: emails.map((email) => ({ email })) },
-			},
-		});
-	}
+    const user = await requireUser();
+    const token = generateToken();
+    const expiresAt = expiryFromPreset(preset as "1h" | "12h" | "1d" | "30d" | "forever");
 
-	return (
-		<form action={action} className="flex flex-col gap-2 max-w-lg">
-			<div className="flex gap-2">
-				<select name="visibility" className="border rounded p-2">
-					<option value="PUBLIC">PUBLIC</option>
-					<option value="PRIVATE">PRIVATE</option>
-				</select>
-				<select name="preset" className="border rounded p-2">
-					<option value="1h">1 hour</option>
-					<option value="12h">12 hours</option>
-					<option value="1d">1 day</option>
-					<option value="30d">30 days</option>
-					<option value="forever">Forever</option>
-				</select>
-			</div>
-			<input
-				name="emails"
-				placeholder="Private emails (comma-separated)"
-				className="border rounded p-2"
-			/>
-			<button className="bg-blue-600 text-white rounded p-2 w-fit">
-				Create Link
-			</button>
-		</form>
-	);
+    const video = await prisma.video.findUnique({ where: { id: videoId } });
+    if (!video || video.userId !== user.id) throw new Error("Video not found");
+
+    const link = await prisma.shareLink.create({
+      data: {
+        token,
+        videoId,
+        createdBy: user.id,
+        visibility: visibility === "PRIVATE" ? "PRIVATE" : "PUBLIC",
+        expiresAt,
+        emails: { create: emails.map(email => ({ email })) }
+      },
+      include: { emails: true }
+    });
+
+    if (visibility === "PRIVATE" && link.emails.length > 0) {
+      const recipientEmails = link.emails.map(e => e.email).filter(Boolean);
+      const registered = await getRegisteredRecipients(recipientEmails);
+      if (registered.length > 0) {
+        const linkUrl = `${process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/,"")}/s/${link.token}`;
+        await sendPrivateShareEmail({
+          to: registered,
+          linkUrl,
+          videoTitle: video.title ?? video.id,
+          expiresAt
+        });
+      }
+    }
+  }
+
+  return (
+    <form action={action} className="flex flex-col gap-2 max-w-lg">
+      <div className="flex gap-2">
+        <select name="visibility" className="border rounded p-2">
+          <option value="PUBLIC">PUBLIC</option>
+          <option value="PRIVATE">PRIVATE</option>
+        </select>
+        <select name="preset" className="border rounded p-2">
+          <option value="1h">1 hour</option>
+          <option value="12h">12 hours</option>
+          <option value="1d">1 day</option>
+          <option value="30d">30 days</option>
+          <option value="forever">Forever</option>
+        </select>
+      </div>
+      <input name="emails" placeholder="Private emails (comma-separated)" className="border rounded p-2" />
+      <button className="bg-blue-600 text-white rounded p-2 w-fit">Create Link</button>
+    </form>
+  );
 }
