@@ -23,7 +23,7 @@ export const worker = new Worker(
 
 		const localPath = tmpFile('.mp4');
 		const resp = await fetch(signed.signedUrl);
-		await saveToFile(resp as any, localPath);
+		await saveToFile(resp as unknown as Response, localPath);
 
 		const duration = Math.max(1, await probeDuration(localPath));
 		const marks = [0.2, 0.5, 0.8].map((m) =>

@@ -253,23 +253,15 @@ export default function ShareLinksTable() {
 									{/* Link cell: truncated + Copy + Open */}
 									<td className="p-4">
 										<div className="flex items-center gap-2">
-											<span className="font-mono text-xs text-blue-700 dark:text-blue-400">
+											<a href={fullUrl} className="font-mono text-xs text-blue-700 dark:text-blue-400">
 												{truncated}
-											</span>
+											</a>
 											<button
 												onClick={() => copyToClipboard(fullUrl)}
 												className="px-2 py-1 text-xs border rounded hover:bg-gray-50 dark:hover:bg-gray-800"
 												aria-label="Copy link">
 												Copy
 											</button>
-											<a
-												className="px-2 py-1 text-xs border rounded hover:bg-gray-50 dark:hover:bg-gray-800"
-												href={fullUrl}
-												target="_blank"
-												rel="noopener noreferrer"
-												aria-label="Open link">
-												Open
-											</a>
 										</div>
 									</td>
 								</tr>

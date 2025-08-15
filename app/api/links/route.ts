@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { expiryFromPreset, generateToken } from '@/lib/links';
 import { notifyExistingUsers } from '@/lib/notify';
 
-export const revalidate = 0;           // prevent caching
+export const revalidate = 0;
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
@@ -20,76 +20,91 @@ export async function GET(req: Request) {
   const links = await prisma.shareLink.findMany({
     where,
     orderBy: { createdAt: "desc" },
-    include: { video: { select: { id: true, title: true } } }  // ⬅ include title
+    include: { video: { select: { id: true, title: true } } }
   });
 
-  console.log("[links:GET]", { user: user.id, videoId, count: links.length });
+  console.log("[links:GET]", JSON.stringify({
+    user: user.id,
+    videoId,
+    count: links.length
+  }));
+
   return NextResponse.json(links);
 }
 
 export async function POST(req: Request) {
-	const user = await requireUser();
-	const body = await req.json();
-	const { videoId, visibility, preset, emails } = body as {
-		videoId: string;
-		visibility: 'PUBLIC' | 'PRIVATE';
-		preset: '1h' | '12h' | '1d' | '30d' | 'forever';
-		emails?: string[];
-	};
+  const user = await requireUser();
+  const body = await req.json();
+  const { videoId, visibility, preset, emails } = body as {
+    videoId: string;
+    visibility: 'PUBLIC' | 'PRIVATE';
+    preset: '1h' | '12h' | '1d' | '30d' | 'forever';
+    emails?: string[];
+  };
 
-	console.log(
-		'[links:POST] user:',
-		user.id,
-		'video:',
-		videoId,
-		'visibility:',
-		visibility,
-		'preset:',
-		preset,
-		'emails:',
-		emails,
-	);
+  console.log("[links:POST] IN", JSON.stringify({
+    user: user.id,
+    videoId,
+    visibility,
+    preset,
+    emails
+  }));
 
-	const list = (emails ?? []).map((e) => e.trim()).filter(Boolean);
-	if (visibility === 'PRIVATE' && list.length === 0) {
-		console.warn('[links:POST] private link without emails → 400');
-		return NextResponse.json(
-			{ error: 'At least one email is required for PRIVATE links.' },
-			{ status: 400 },
-		);
-	}
+  // Owns the video?
+  const owned = await prisma.video.findFirst({
+    where: { id: videoId, userId: user.id },
+    select: { id: true }
+  });
+  if (!owned) {
+    console.warn("[links:POST] 403 not owner or video not found", { user: user.id, videoId });
+    return NextResponse.json({ error: "Video not found" }, { status: 404 });
+  }
 
-	const token = generateToken();
-	const expiresAt = expiryFromPreset(preset);
+  const list = (emails ?? []).map((e) => e.trim()).filter(Boolean);
+  if (visibility === 'PRIVATE' && list.length === 0) {
+    console.warn("[links:POST] 400 private without emails");
+    return NextResponse.json(
+      { error: 'At least one email is required for PRIVATE links.' },
+      { status: 400 },
+    );
+  }
 
-	const link = await prisma.shareLink.create({
-		data: {
-			token,
-			videoId,
-			createdBy: user.id,
-			visibility,
-			expiresAt,
-			emails: { create: list.map((e) => ({ email: e })) },
-		},
-		include: { emails: true },
-	});
+  const token = generateToken();
+  const expiresAt = expiryFromPreset(preset);
 
-	console.log(
-		'[links:POST] created link:',
-		link.id,
-		'token:',
-		link.token,
-		'emails:',
-		link.emails.map((e) => e.email),
-	);
+  const link = await prisma.shareLink.create({
+    data: {
+      token,
+      videoId,
+      createdBy: user.id,
+      visibility,
+      expiresAt,
+      emails: { create: list.map((e) => ({ email: e })) },
+    },
+    include: { emails: true },
+  });
 
-	// fire-and-forget notifications (don’t block API latency)
-	if (visibility === 'PRIVATE' && link.emails.length > 0) {
-		notifyExistingUsers(
-			link.token,
-			link.emails.map((e) => e.email),
-		).catch((err) => console.error('[links:POST] notify error:', err));
-	}
+  console.log("[links:POST] CREATED", JSON.stringify({
+    id: link.id,
+    token: link.token,
+    emails: link.emails.map(e => e.email),
+    visibility: link.visibility,
+    expiresAt: link.expiresAt
+  }));
 
-	return NextResponse.json(link);
+  if (visibility === 'PRIVATE' && link.emails.length > 0) {
+    // Don’t block the response; log start + end of async
+    console.log("[links:POST] notifyExistingUsers START", JSON.stringify({
+      token: link.token,
+      emails: link.emails.map(e => e.email)
+    }));
+    notifyExistingUsers(
+      link.token,
+      link.emails.map((e) => e.email),
+    )
+      .then(() => console.log("[links:POST] notifyExistingUsers DONE"))
+      .catch((err) => console.error('[links:POST] notifyExistingUsers ERROR', err));
+  }
+
+  return NextResponse.json(link);
 }
