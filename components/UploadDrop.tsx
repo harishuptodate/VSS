@@ -5,10 +5,10 @@ import { Upload } from 'tus-js-client';
 import { supabaseClient } from '@/lib/supabaseClient';
 
 function fmt(n: number) {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`;
-  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`;
-  return `${(n / 1024 ** 3).toFixed(1)} GB`;
+	if (n < 1024) return `${n} B`;
+	if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`;
+	if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`;
+	return `${(n / 1024 ** 3).toFixed(1)} GB`;
 }
 
 export default function UploadDrop() {
@@ -18,7 +18,7 @@ export default function UploadDrop() {
 	const [status, setStatus] = useState<'idle' | 'uploading' | 'done'>('idle');
 
 	async function startUpload(file: File) {
-		const max = Number(process.env.NEXT_PUBLIC_UPLOAD_MAX_BYTES ?? 500_000_000);
+		const max = Number(process.env.NEXT_PUBLIC_UPLOAD_MAX_BYTES ?? 52_428_800); // 50MB
 		if (Number.isFinite(max) && file.size > max) {
 			alert(`Max ${(max / 1024 / 1024).toFixed(0)} MB`);
 			return;
@@ -141,14 +141,13 @@ export default function UploadDrop() {
 							{status === 'uploading' ? 'Uploading...' : 'Upload complete!'}
 						</span>
 						<span className="text-gray-500 dark:text-gray-400">
-						{fmt(bytes.up)} / {fmt(bytes.total)} ({progress}%)
+							{fmt(bytes.up)} / {fmt(bytes.total)} ({progress}%)
 						</span>
 					</div>
 					<div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
 						<div
 							className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-300 ease-out"
 							style={{ width: `${progress}%` }}
-							
 						/>
 					</div>
 				</div>

@@ -11,7 +11,9 @@ export async function POST(req: Request) {
 
   const { filename, type, size } = await req.json();
   const videoId = randomUUID();
-
+  if (size > Number(process.env.NEXT_PUBLIC_UPLOAD_MAX_BYTES ?? 52_428_800)) {
+    return NextResponse.json({ error: "File size exceeds 50MB limit" }, { status: 400 });
+  }
   // ✅ object name INSIDE the bucket (no bucket name prefix)
   const objectPath = `${user.id}/${videoId}.mp4`;
 

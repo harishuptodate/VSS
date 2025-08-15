@@ -1,9 +1,8 @@
 // components/ShareLinksTable.tsx
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import useSWR from 'swr';
-import { supabaseClient } from '@/lib/supabaseClient';
 
 type LinkRow = {
 	id: string;
@@ -13,59 +12,43 @@ type LinkRow = {
 	lastViewedAt: string | null;
 	createdAt: string;
 	video?: { id: string; title: string | null } | null;
+	emails?: { email: string }[];
 };
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 function truncateLink(path: string, visible = 14) {
-	// show first N chars then ellipsis (keeps layout tidy)
 	if (path.length <= visible) return path;
 	return `${path.slice(0, visible)}…`;
 }
 
+function truncateTitle(title: string, maxLength = 25) {
+	if (title.length <= maxLength) return title;
+	return `${title.slice(0, maxLength)}…`;
+}
+
+function truncateEmail(email: string, maxLength = 20) {
+	if (email.length <= maxLength) return email;
+	return `${email.slice(0, maxLength)}…`;
+}
+
 export default function ShareLinksTable() {
-	const { data, mutate, error } = useSWR<LinkRow[]>('/api/links', fetcher, {
-		revalidateOnFocus: false,
+	const { data, error, mutate } = useSWR<LinkRow[]>('/api/links', fetcher, {
+		revalidateOnFocus: true,
+		refreshInterval: 5000, // Refresh every 5 seconds
 	});
 
-	// realtime: auto-refresh on INSERT/UPDATE
-	useEffect(() => {
-		let unsub = () => {};
-		(async () => {
-			const supa = supabaseClient();
-			const { data: userRes } = await supa.auth.getUser();
-			const userId = userRes.user?.id;
-			if (!userId) return;
+	const [copySuccess, setCopySuccess] = useState<string | null>(null);
 
-			const channel = supa
-				.channel(`sharelinks-${userId}`)
-				.on(
-					'postgres_changes',
-					{
-						event: 'INSERT',
-						schema: 'public',
-						table: 'ShareLink',
-						filter: `createdBy=eq.${userId}`,
-					},
-					() => mutate(),
-				)
-				.on(
-					'postgres_changes',
-					{
-						event: 'UPDATE',
-						schema: 'public',
-						table: 'ShareLink',
-						filter: `createdBy=eq.${userId}`,
-					},
-					() => mutate(),
-				)
-				.subscribe();
-
-			unsub = () => supa.removeChannel(channel);
-		})();
-
-		return () => unsub();
-	}, [mutate]);
+	async function copyToClipboard(text: string, linkId: string) {
+		try {
+			await navigator.clipboard.writeText(text);
+			setCopySuccess(linkId);
+			setTimeout(() => setCopySuccess(null), 2000);
+		} catch (e) {
+			console.error('copy failed', e);
+		}
+	}
 
 	if (error) {
 		return (
@@ -74,11 +57,29 @@ export default function ShareLinksTable() {
 					<span className="text-red-600">!</span>
 				</div>
 				<p className="text-red-700 dark:text-red-300">Failed to load links.</p>
+				<button
+					onClick={() => mutate()}
+					className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+					Retry
+				</button>
 			</div>
 		);
 	}
 
-	if (!data)
+	if (!data) {
+		return (
+			<div className="text-center py-8">
+				<div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+					<div className="w-8 h-8 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
+				</div>
+				<p className="text-gray-500 dark:text-gray-400">
+					Loading share links...
+				</p>
+			</div>
+		);
+	}
+
+	if (data.length === 0) {
 		return (
 			<div className="text-center py-8">
 				<div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -100,14 +101,6 @@ export default function ShareLinksTable() {
 				</p>
 			</div>
 		);
-
-	async function copyToClipboard(text: string) {
-		try {
-			await navigator.clipboard.writeText(text);
-		} catch (e) {
-			console.error('copy failed', e);
-			// fallback: select & copy could be added if needed
-		}
 	}
 
 	const base = process.env.NEXT_PUBLIC_SITE_URL || '';
@@ -119,7 +112,13 @@ export default function ShareLinksTable() {
 					<thead>
 						<tr className="bg-gray-50 dark:bg-gray-800/50">
 							<th className="p-4 text-left font-semibold text-gray-900 dark:text-white">
+								Video Title
+							</th>
+							<th className="p-4 text-left font-semibold text-gray-900 dark:text-white">
 								Visibility
+							</th>
+							<th className="p-4 text-left font-semibold text-gray-900 dark:text-white">
+								Shared With
 							</th>
 							<th className="p-4 text-left font-semibold text-gray-900 dark:text-white">
 								Expiry
@@ -130,11 +129,6 @@ export default function ShareLinksTable() {
 							<th className="p-4 text-left font-semibold text-gray-900 dark:text-white">
 								Last Access
 							</th>
-							{/* swapped: show Title column */}
-							<th className="p-4 text-left font-semibold text-gray-900 dark:text-white">
-								Title
-							</th>
-							{/* and a compact Link cell with actions */}
 							<th className="p-4 text-left font-semibold text-gray-900 dark:text-white">
 								Link
 							</th>
@@ -146,11 +140,30 @@ export default function ShareLinksTable() {
 							const fullUrl = `${base}/s/${l.token}`;
 							const pretty = `/s/${l.token}`;
 							const truncated = truncateLink(pretty);
+							const videoTitle =
+								l.video?.title || l.video?.id || 'Unknown Video';
 
 							return (
 								<tr
 									key={l.id}
 									className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors">
+									{/* Video Title */}
+									<td className="p-4">
+										<div className="max-w-xs">
+											<div
+												className="font-medium text-gray-900 dark:text-gray-100"
+												title={videoTitle}>
+												{truncateTitle(videoTitle)}
+											</div>
+											{l.video?.id && (
+												<div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+													ID: {l.video.id.slice(0, 8)}...
+												</div>
+											)}
+										</div>
+									</td>
+
+									{/* Visibility */}
 									<td className="p-4">
 										<span
 											className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
@@ -195,12 +208,41 @@ export default function ShareLinksTable() {
 										</span>
 									</td>
 
+									{/* Shared With (Emails) */}
+									<td className="p-4">
+										{l.visibility === 'PRIVATE' &&
+										l.emails &&
+										l.emails.length > 0 ? (
+											<div className="space-y-1">
+												{l.emails.slice(0, 2).map((email, index) => (
+													<div
+														key={index}
+														className="text-xs text-gray-700 dark:text-gray-300 font-mono"
+														title={email.email}>
+														{truncateEmail(email.email)}
+													</div>
+												))}
+												{l.emails.length > 2 && (
+													<div className="text-xs text-gray-500 dark:text-gray-400">
+														+{l.emails.length - 2} more
+													</div>
+												)}
+											</div>
+										) : (
+											<span className="text-gray-400 dark:text-gray-500 text-xs">
+												{l.visibility === 'PUBLIC' ? 'Everyone' : 'No emails'}
+											</span>
+										)}
+									</td>
+
+									{/* Expiry */}
 									<td className="p-4 text-gray-700 dark:text-gray-300">
 										{l.expiresAt
 											? new Date(l.expiresAt).toLocaleString()
 											: 'Forever'}
 									</td>
 
+									{/* Status */}
 									<td className="p-4">
 										<span
 											className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
@@ -239,28 +281,32 @@ export default function ShareLinksTable() {
 										</span>
 									</td>
 
+									{/* Last Access */}
 									<td className="p-4 text-gray-700 dark:text-gray-300">
 										{l.lastViewedAt
 											? new Date(l.lastViewedAt).toLocaleString()
 											: '-'}
 									</td>
 
-									{/* Title */}
-									<td className="p-4 text-gray-900 dark:text-gray-100">
-										{truncateLink(l.video?.title || l.video?.id || '') || '—'}
-									</td>
-
-									{/* Link cell: truncated + Copy + Open */}
+									{/* Link */}
 									<td className="p-4">
 										<div className="flex items-center gap-2">
-											<a href={fullUrl} className="font-mono text-xs text-blue-700 dark:text-blue-400">
+											<a
+												href={fullUrl}
+												target="_blank"
+												rel="noopener noreferrer"
+												className="font-mono text-xs text-blue-700 dark:text-blue-400 hover:underline">
 												{truncated}
 											</a>
 											<button
-												onClick={() => copyToClipboard(fullUrl)}
-												className="px-2 py-1 text-xs border rounded hover:bg-gray-50 dark:hover:bg-gray-800"
+												onClick={() => copyToClipboard(fullUrl, l.id)}
+												className={`px-2 py-1 text-xs border rounded transition-colors duration-200 ${
+													copySuccess === l.id
+														? 'bg-green-100 text-green-700 border-green-300'
+														: 'hover:bg-gray-50 dark:hover:bg-gray-800'
+												}`}
 												aria-label="Copy link">
-												Copy
+												{copySuccess === l.id ? 'Copied!' : 'Copy'}
 											</button>
 										</div>
 									</td>

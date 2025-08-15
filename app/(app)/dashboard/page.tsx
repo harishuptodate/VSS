@@ -23,21 +23,23 @@ export default async function DashboardPage() {
 			status: v.status,
 			createdAt: v.createdAt,
 			thumbs: await Promise.all(
-				v.thumbnails.slice(0, 3).map( t =>  signThumbUrl(t.objectPath))
+				v.thumbnails.slice(0, 3).map((t) => signThumbUrl(t.objectPath)),
 			),
 		})),
 	);
 
 	return (
-		<main className="space-y-8">
+		<main className="page-container space-y-6 sm:space-y-8 animate-fade-in">
 			<DashboardRealtimeRefresher userId={user.id} />
-			<div className="card-elevated p-6">
-				<div className="flex items-center justify-between">
-					<div className="space-y-1">
-						<h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+
+			{/* Header Section */}
+			<div className="card-elevated p-4 sm:p-6 lg:p-8">
+				<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+					<div className="space-y-2">
+						<h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white">
 							Dashboard
 						</h1>
-						<p className="text-gray-600 dark:text-gray-300">
+						<p className="text-gray-600 dark:text-gray-300 text-sm sm:text-base">
 							Welcome back, {user.email}
 						</p>
 					</div>
@@ -45,11 +47,12 @@ export default async function DashboardPage() {
 				</div>
 			</div>
 
-			<section className="section-card">
-				<div className="flex items-center space-x-3 mb-6">
-					<div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
+			{/* Upload Section */}
+			<section className="section-card animate-slide-up">
+				<div className="flex items-center space-x-3 mb-4 sm:mb-6">
+					<div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
 						<svg
-							className="w-4 h-4 text-white"
+							className="w-4 h-4 sm:w-5 sm:h-5 text-white"
 							fill="none"
 							stroke="currentColor"
 							viewBox="0 0 24 24">
@@ -61,18 +64,19 @@ export default async function DashboardPage() {
 							/>
 						</svg>
 					</div>
-					<h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+					<h2 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 dark:text-white">
 						Upload New Video
 					</h2>
 				</div>
 				<UploadDrop />
 			</section>
 
-			<section className="section-card">
-				<div className="flex items-center space-x-3 mb-6">
-					<div className="w-8 h-8 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center">
+			{/* Videos Section */}
+			<section className="section-card animate-slide-up">
+				<div className="flex items-center space-x-3 mb-4 sm:mb-6">
+					<div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center">
 						<svg
-							className="w-4 h-4 text-white"
+							className="w-4 h-4 sm:w-5 sm:h-5 text-white"
 							fill="none"
 							stroke="currentColor"
 							viewBox="0 0 24 24">
@@ -84,15 +88,21 @@ export default async function DashboardPage() {
 							/>
 						</svg>
 					</div>
-					<h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+					<h2 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 dark:text-white">
 						Your Videos
 					</h2>
+					{videos.length > 0 && (
+						<span className="ml-auto bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 text-xs font-medium px-2.5 py-1 rounded-full">
+							{videos.length} {videos.length === 1 ? 'video' : 'videos'}
+						</span>
+					)}
 				</div>
+
 				{items.length === 0 ? (
-					<div className="text-center py-12">
-						<div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+					<div className="text-center py-8 sm:py-12 animate-scale-in">
+						<div className="w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
 							<svg
-								className="w-8 h-8 text-gray-400"
+								className="w-8 h-8 sm:w-10 sm:h-10 text-gray-400"
 								fill="none"
 								stroke="currentColor"
 								viewBox="0 0 24 24">
@@ -104,7 +114,7 @@ export default async function DashboardPage() {
 								/>
 							</svg>
 						</div>
-						<p className="text-gray-500 dark:text-gray-400 text-lg">
+						<p className="text-gray-500 dark:text-gray-400 text-base sm:text-lg font-medium">
 							No videos uploaded yet.
 						</p>
 						<p className="text-gray-400 dark:text-gray-500 text-sm mt-1">
@@ -112,9 +122,14 @@ export default async function DashboardPage() {
 						</p>
 					</div>
 				) : (
-					<div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
-						{items.map((v) => (
-							<VideoCard key={v.id} {...v} />
+					<div className="responsive-grid">
+						{items.map((v, index) => (
+							<div
+								key={v.id}
+								className="animate-slide-up"
+								style={{ animationDelay: `${index * 100}ms` }}>
+								<VideoCard {...v} />
+							</div>
 						))}
 					</div>
 				)}

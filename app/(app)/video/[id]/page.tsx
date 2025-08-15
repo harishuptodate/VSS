@@ -24,13 +24,15 @@ export default async function VideoPage({
 		: undefined;
 
 	return (
-		<main className="space-y-8">
-			<div className="card-elevated p-6">
-				<div className="space-y-4">
-					<div className="flex items-center space-x-3">
-						<div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
+		<main className="page-container space-y-6 sm:space-y-8 animate-fade-in">
+			{/* Video Player Section - Improved Layout */}
+			<div className="card-elevated p-4 sm:p-6 lg:p-8">
+				<div className="space-y-4 sm:space-y-6">
+					{/* Header */}
+					<div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+						<div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center flex-shrink-0">
 							<svg
-								className="w-5 h-5 text-white"
+								className="w-5 h-5 sm:w-6 sm:h-6 text-white"
 								fill="none"
 								stroke="currentColor"
 								viewBox="0 0 24 24">
@@ -42,42 +44,53 @@ export default async function VideoPage({
 								/>
 							</svg>
 						</div>
-						<h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-							{v.title || v.id}
-						</h2>
+						<div className="min-w-0 flex-1">
+							<h1
+								className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white break-words leading-tight"
+								title={v.title || v.id}>
+								{v.title || v.id}
+							</h1>
+						</div>
 					</div>
 
-					<div className="bg-gray-900 rounded-2xl overflow-hidden">
-						<video
-							controls
-							className="w-full"
-							src={src}
-							poster={poster ?? undefined}
-						/>
+					{/* Video Player - Responsive Container */}
+					<div className="flex justify-center">
+						<div className="w-full max-w-4xl">
+							<div className="bg-gray-900 rounded-2xl overflow-hidden shadow-2xl">
+								<video
+									controls
+									className="w-full h-auto max-h-[70vh] object-contain"
+									src={src}
+									poster={poster ?? undefined}
+									preload="metadata"
+								/>
+							</div>
+						</div>
 					</div>
 
-					<div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
-						<div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 text-center">
-							<p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+					{/* Video Stats Grid - Compact Layout */}
+					<div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 pt-2 sm:pt-4">
+						<div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-3 sm:p-4 text-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
+							<p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">
 								Status
 							</p>
-							<p className="font-semibold text-gray-900 dark:text-white">
+							<p className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base">
 								{v.status}
 							</p>
 						</div>
-						<div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 text-center">
-							<p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+						<div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-3 sm:p-4 text-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
+							<p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">
 								Size
 							</p>
-							<p className="font-semibold text-gray-900 dark:text-white">
+							<p className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base">
 								{(Number(v.sizeBytes) / (1024 * 1024)).toFixed(1)} MB
 							</p>
 						</div>
-						<div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 text-center">
-							<p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+						<div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-3 sm:p-4 text-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
+							<p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">
 								Uploaded
 							</p>
-							<p className="font-semibold text-gray-900 dark:text-white">
+							<p className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base">
 								{new Date(v.createdAt).toLocaleDateString()}
 							</p>
 						</div>
@@ -85,34 +98,30 @@ export default async function VideoPage({
 				</div>
 			</div>
 
-			<section className="section-card">
-				<div className="flex items-center space-x-3 mb-6">
-					<div className="w-8 h-8 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center">
-						<svg
-							className="w-4 h-4 text-white"
-							fill="none"
-							stroke="currentColor"
-							viewBox="0 0 24 24">
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth={2}
-								d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
-							/>
-						</svg>
-					</div>
-					<h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-						Create Share Link
-					</h3>
-				</div>
-				<CreateLinkForm videoId={v.id} />
-			</section>
+			{/* Share Links Section - Compact Horizontal Layout */}
+			<section className="section-card animate-slide-up">
+  <div className="flex items-center gap-2 mb-3">
+    <div className="w-7 h-7 bg-gradient-to-br from-green-500 to-green-600 rounded-lg grid place-items-center">
+      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+          d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+      </svg>
+    </div>
+    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Share This Video</h2>
+  </div>
 
-			<section className="section-card">
-				<div className="flex items-center space-x-3 mb-6">
-					<div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center">
+  <CreateLinkForm videoId={id} />
+</section>
+
+
+
+
+			{/* Existing Links Section */}
+			<section className="section-card animate-slide-up">
+				<div className="flex items-center space-x-3 mb-4 sm:mb-6">
+					<div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center">
 						<svg
-							className="w-4 h-4 text-white"
+							className="w-4 h-4 sm:w-5 sm:w-5 text-white"
 							fill="none"
 							stroke="currentColor"
 							viewBox="0 0 24 24">
@@ -124,9 +133,9 @@ export default async function VideoPage({
 							/>
 						</svg>
 					</div>
-					<h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-						Share Links
-					</h3>
+					<h2 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 dark:text-white">
+						Existing Share Links
+					</h2>
 				</div>
 				<ShareLinksTable />
 			</section>

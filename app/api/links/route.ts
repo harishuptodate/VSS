@@ -21,7 +21,10 @@ export async function GET(req: Request) {
 		where,
 		orderBy: { createdAt: 'desc' },
 		take: 10,
-		include: { video: { select: { id: true, title: true } } },
+		include: {
+			video: { select: { id: true, title: true } },
+			emails: true,
+		},
 	});
 
 	console.log(
