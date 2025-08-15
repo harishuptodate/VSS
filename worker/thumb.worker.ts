@@ -1,6 +1,6 @@
 // worker/thumb.worker.ts
 import { Worker } from 'bullmq';
-import { prisma } from '../lib/prisma'; // re-use app's prisma
+import { prisma } from './prisma'; // re-use app's prisma
 import { supabaseService } from './supabase';
 import { tmpFile, saveToFile, safeUnlink } from './utils/tmp';
 import { probeDuration, extractJpeg } from './utils/ffmpeg';

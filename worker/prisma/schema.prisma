@@ -1,0 +1,73 @@
+// prisma/schema.prisma
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum VideoStatus {
+  UPLOADING
+  PROCESSING
+  READY
+}
+
+model Video {
+  id           String       @id @default(cuid())
+  userId       String       @db.Uuid
+  title        String?
+  objectPath   String
+  sizeBytes    BigInt
+  mimeType     String
+  status       VideoStatus  @default(UPLOADING)
+  durationSec  Int?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  thumbnails   Thumbnail[]
+  shares       ShareLink[]
+}
+
+model Thumbnail {
+  id          String   @id @default(cuid())
+  videoId     String
+  objectPath  String
+  timecodeSec Int
+  createdAt   DateTime @default(now())
+  video       Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([videoId])
+}
+
+enum Visibility {
+  PUBLIC
+  PRIVATE
+}
+
+model ShareLink {
+  id            String      @id @default(cuid())
+  videoId       String
+  createdBy     String      @db.Uuid
+  visibility    Visibility
+  token         String      @unique
+  expiresAt     DateTime?
+  lastViewedAt  DateTime?
+  createdAt     DateTime    @default(now())
+  video         Video       @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  emails        ShareEmail[]
+
+  @@index([videoId])
+  @@index([token])
+}
+
+model ShareEmail {
+  id         String    @id @default(cuid())
+  linkId     String
+  email      String
+  createdAt  DateTime  @default(now())
+  link       ShareLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  @@index([linkId])
+}
