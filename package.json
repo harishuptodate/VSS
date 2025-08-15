@@ -6,7 +6,7 @@
     "node": ">=18.18 <23"
   },
   "scripts": {
-    "dev": "next dev && dotenv -e .env.local -- tsx watch worker/index.ts",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
