@@ -177,7 +177,7 @@ export default async function TokenView({
 					<div className="bg-gray-900 rounded-2xl overflow-hidden">
 						<video
 							controls
-							className="w-full"
+							className="w-full h-auto max-h-[70vh] object-contain"
 							src={src}
 							poster={poster ?? undefined}
 						/>
