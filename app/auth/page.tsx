@@ -25,7 +25,9 @@ export default function AuthPage() {
 					password,
 				});
 				if (error) throw error;
-				setMessage('Check your email for the confirmation link!');
+				// setMessage('Check your email for the confirmation link!');
+				setMessage('Sign up successful! Please Sign in to continue');
+
 			} else {
 				const { error } = await supabaseClient().auth.signInWithPassword({
 					email,

@@ -25,7 +25,9 @@ export default async function DashboardPage() {
 				status: v.status,
 				createdAt: v.createdAt,
 				thumbs: await Promise.all(
-					v.thumbnails.slice(0, 3).map((t) => signThumbUrl(t.objectPath)),
+					v.thumbnails
+						.slice(0, 3)
+						.map(async (t) => await signThumbUrl(t.objectPath)),
 				),
 			})),
 		);
@@ -130,7 +132,14 @@ export default async function DashboardPage() {
 									key={v.id}
 									className="animate-slide-up"
 									style={{ animationDelay: `${index * 100}ms` }}>
-									<VideoCard {...v} />
+									<VideoCard
+										key={v.id}
+										id={v.id}
+										title={v.title ?? ''}
+										status={v.status}
+										createdAt={v.createdAt.toISOString()}
+										thumbs={v.thumbs.map((t) => t ?? '')}
+									/>
 								</div>
 							))}
 						</div>
@@ -143,7 +152,7 @@ export default async function DashboardPage() {
 		if (error instanceof Error && error.message === 'UNAUTHENTICATED') {
 			redirect('/auth');
 		}
-		
+
 		// For other errors, you might want to show an error page
 		console.error('Dashboard error:', error);
 		redirect('/auth');
