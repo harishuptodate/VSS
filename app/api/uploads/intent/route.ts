@@ -96,6 +96,7 @@ export async function POST(req: Request) {
 			videoId: videoId,
 			objectPath: objectPath,
 			bucket: bucketVideos,
+			tusEndpoint: tusEndpoint,
 		});
 	} catch (error) {
 		console.error('Intent creation failed:', error);

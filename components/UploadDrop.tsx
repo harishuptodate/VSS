@@ -1,13 +1,14 @@
 // components/UploadDrop.tsx
 'use client';
 import { useRef, useState } from 'react';
+import { Upload } from 'tus-js-client';
 import { supabaseClient } from '@/lib/supabaseClient';
 
 function fmt(n: number) {
 	if (n < 1024) return `${n} B`;
 	if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`;
-	if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`;
-	return `${(n / 1024 ** 3).toFixed(1)} GB`;
+	if (n < 1024 ** 3) return `${(n / 1024 / 1024).toFixed(1)} MB`;
+	return `${(n / 1024 / 1024 / 1024).toFixed(1)} GB`;
 }
 
 export default function UploadDrop() {
@@ -19,17 +20,6 @@ export default function UploadDrop() {
 	async function startUpload(file: File) {
 		// ✅ FRONTEND VALIDATION - Check file size immediately
 		const maxSizeBytes = 52_428_800; // 50MB in bytes
-
-		// // 🔍 DEBUG LOGGING - Let's see what's happening
-		// console.log('=== FILE SIZE VALIDATION DEBUG ===');
-		// console.log('File size (bytes):', file.size);
-		// console.log('File size (MB):', (file.size / 1024 / 1024).toFixed(2));
-		// console.log('Max allowed (bytes):', maxSizeBytes);
-		// console.log('Max allowed (MB):', (maxSizeBytes / 1024 / 1024).toFixed(2));
-		// console.log('Is file too large?', file.size > maxSizeBytes);
-		// console.log('File type:', file.type);
-		// console.log('File name:', file.name);
-		// console.log('================================');
 
 		if (file.size > maxSizeBytes) {
 			const maxSizeMB = (maxSizeBytes / 1024 / 1024).toFixed(0);
@@ -70,46 +60,68 @@ export default function UploadDrop() {
 				throw new Error(intent.error);
 			}
 
-			// Add this right before the upload attempt:
-			console.log('=== UPLOAD DEBUG ===');
-			console.log('Bucket from intent:', intent.bucket);
-			console.log('Object path:', intent.objectPath);
-			console.log('File size:', file.size);
-			console.log('File type:', file.type);
-			console.log('===================');
-
-			// Upload directly to Supabase storage
+			// ✅ TUS UPLOAD: Get user access token
 			const supa = supabaseClient();
-			const { data, error } = await supa.storage
-				.from(intent.bucket)
-				.upload(intent.objectPath, file, {
-					upsert: true,
-					contentType: file.type,
-				});
-
-			if (error) {
-				throw error;
+			const {
+				data: { session },
+			} = await supa.auth.getSession();
+			if (!session?.access_token) {
+				alert('You must be signed in to upload.');
+				setStatus('idle');
+				return;
 			}
 
-			// Update progress to show completion
-			setProgress(100);
-			setBytes({ up: file.size, total: file.size });
+			// ✅ TUS UPLOAD: Create and start upload
+			const upload = new Upload(file, {
+				endpoint: intent.tusEndpoint as string,
+				headers: {
+					authorization: `Bearer ${session.access_token}`,
+					'x-upsert': 'true', // optional but recommended
+				},
+				// TUS requires metadata keys; tus-js-client will base64 values for us.
+				metadata: {
+					bucketName: intent.bucket,
+					objectName: intent.objectPath,
+					contentType: file.type || 'video/mp4',
+					cacheControl: '3600',
+				},
+				retryDelays: [0, 1000, 3000, 5000],
+				onError: (e) => {
+					console.error('TUS upload error:', e);
+					alert(e.message);
+					setStatus('idle');
+					setProgress(0);
+				},
+				onProgress: (bytesUploaded, bytesTotal) => {
+					// ✅ REAL-TIME PROGRESS: Update progress bar smoothly
+					setBytes({ up: bytesUploaded, total: bytesTotal });
+					setProgress(Math.floor((bytesUploaded / bytesTotal) * 100));
+				},
+				onSuccess: async () => {
+					console.log('✅ TUS upload completed successfully');
 
-			// Mark upload as complete
-			await fetch('/api/uploads/complete', {
-				method: 'POST',
-				body: JSON.stringify({
-					videoId: intent.videoId,
-					size: file.size,
-					type: file.type,
-				}),
+					// Mark upload as complete
+					await fetch('/api/uploads/complete', {
+						method: 'POST',
+						body: JSON.stringify({
+							videoId: intent.videoId,
+							size: file.size,
+							type: file.type,
+						}),
+					});
+
+					setStatus('done');
+					setProgress(100);
+				},
 			});
 
-			setStatus('done');
+			// ✅ START TUS UPLOAD
+			upload.start();
 		} catch (error) {
 			console.error('Upload failed:', error);
 			alert(error instanceof Error ? error.message : 'Upload failed');
 			setStatus('idle');
+			setProgress(0);
 		}
 	}
 
