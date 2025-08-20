@@ -1,21 +1,32 @@
 // lib/notify.ts
 import { Resend } from 'resend';
-import { createClient } from '@supabase/supabase-js';
+import { createServerClient } from './supabaseServer';
 
-const resend = new Resend(process.env.RESEND_API_KEY!);
+// Security: Validate all environment variables
+const resendApiKey = process.env.RESEND_API_KEY;
+const resendFrom = process.env.RESEND_FROM;
+const supabaseUrl =
+	process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// Fallback to Resend's dev sender if RESEND_FROM is not set
-const FALLBACK_FROM = 'onboarding@resend.dev';
-const FROM = process.env.RESEND_FROM || FALLBACK_FROM;
-if (!process.env.RESEND_FROM) {
-	console.warn('[notify] RESEND_FROM not set; using fallback:', FALLBACK_FROM);
+if (!resendApiKey) {
+	throw new Error('Missing RESEND_API_KEY environment variable');
 }
 
-const admin = createClient(
-	process.env.NEXT_PUBLIC_SUPABASE_URL!,
-	process.env.SUPABASE_SERVICE_ROLE_KEY!, // server-only
-	{ auth: { persistSession: false } },
-);
+if (!supabaseUrl || !supabaseServiceKey) {
+	throw new Error('Missing Supabase environment variables');
+}
+
+const resend = new Resend(resendApiKey);
+
+// Security: Use validated environment variables
+const FROM = resendFrom || 'noreply@yourdomain.com';
+if (!resendFrom) {
+	console.warn('RESEND_FROM not set, using fallback email');
+}
+
+// Security: Server-side only operations
+const supabase = createServerClient();
 
 const REQUIRE_CONFIRMED_EMAIL =
 	(process.env.REQUIRE_CONFIRMED_EMAIL || 'false').toLowerCase() === 'true';
@@ -29,7 +40,7 @@ async function getUserViaAdmin(email: string) {
 	try {
 		// Try direct getUserByEmail if the SDK has it
 		const anyAdmin = (
-			admin.auth as unknown as {
+			(await supabase).auth as unknown as {
 				admin?: { getUserByEmail?: (email: string) => Promise<unknown> };
 			}
 		).admin;
@@ -66,7 +77,7 @@ async function getUserViaAdmin(email: string) {
 		const PER_PAGE = 100;
 		const MAX_PAGES = 5; // scan up to 500 users; raise if needed
 		for (let page = 1; page <= MAX_PAGES; page++) {
-			const { data, error } = await admin.auth.admin.listUsers({
+			const { data, error } = await (await supabase).auth.admin.listUsers({
 				page,
 				perPage: PER_PAGE,
 			});
@@ -99,8 +110,8 @@ async function getUserViaAuthSchema(email: string) {
 	try {
 		console.log('[notify] auth.users fallback for', email);
 		// ✅ v2 syntax: .schema('auth').from('users')
-		const { data, error } = await admin
-			.schema('auth')
+		const { data, error } = await (await supabase)
+			.schema('public')
 			.from('users')
 			.select('id,email,email_confirmed_at')
 			.eq('email', email)
@@ -156,7 +167,7 @@ export async function notifyExistingUsers(token: string, rawEmails: string[]) {
 	);
 
 	// 🚦 In dev with fallback sender, Resend only allows sending to your own account email.
-	if (FROM === FALLBACK_FROM) {
+	if (FROM === 'noreply@yourdomain.com') {
 		console.warn(
 			'[notify] Using fallback sender. Resend will ONLY deliver to your account email. Verify a domain and set RESEND_FROM in prod.',
 		);

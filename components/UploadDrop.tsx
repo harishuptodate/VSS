@@ -1,7 +1,6 @@
 // components/UploadDrop.tsx
 'use client';
 import { useRef, useState } from 'react';
-import { Upload } from 'tus-js-client';
 import { supabaseClient } from '@/lib/supabaseClient';
 
 function fmt(n: number) {
@@ -18,71 +17,100 @@ export default function UploadDrop() {
 	const [status, setStatus] = useState<'idle' | 'uploading' | 'done'>('idle');
 
 	async function startUpload(file: File) {
-		const max = Number(process.env.NEXT_PUBLIC_UPLOAD_MAX_BYTES ?? 52_428_800); // 50MB
-		if (Number.isFinite(max) && file.size > max) {
-			alert(`Max ${(max / 1024 / 1024).toFixed(0)} MB`);
-			return;
+		// ✅ FRONTEND VALIDATION - Check file size immediately
+		const maxSizeBytes = 52_428_800; // 50MB in bytes
+
+		// // 🔍 DEBUG LOGGING - Let's see what's happening
+		// console.log('=== FILE SIZE VALIDATION DEBUG ===');
+		// console.log('File size (bytes):', file.size);
+		// console.log('File size (MB):', (file.size / 1024 / 1024).toFixed(2));
+		// console.log('Max allowed (bytes):', maxSizeBytes);
+		// console.log('Max allowed (MB):', (maxSizeBytes / 1024 / 1024).toFixed(2));
+		// console.log('Is file too large?', file.size > maxSizeBytes);
+		// console.log('File type:', file.type);
+		// console.log('File name:', file.name);
+		// console.log('================================');
+
+		if (file.size > maxSizeBytes) {
+			const maxSizeMB = (maxSizeBytes / 1024 / 1024).toFixed(0);
+			const fileSizeMB = (file.size / 1024 / 1024).toFixed(1);
+			console.log('🚫 FILE REJECTED - Size too large!');
+			console.log(`File: ${fileSizeMB}MB, Max: ${maxSizeMB}MB`);
+			alert(
+				`File too large! Your file is ${fileSizeMB}MB, but the maximum allowed is ${maxSizeMB}MB.`,
+			);
+			return; // ✅ ABORT UPLOAD IMMEDIATELY
 		}
+
+		// ✅ FRONTEND VALIDATION - Check file type
+		if (!file.type.startsWith('video/')) {
+			console.log('🚫 FILE REJECTED - Invalid file type!');
+			console.log(`File type: ${file.type}`);
+			alert(
+				'Invalid file type! Please select a video file (MP4, MOV, AVI, etc.).',
+			);
+			return; // ✅ ABORT UPLOAD IMMEDIATELY
+		}
+
+		console.log('✅ FILE VALIDATION PASSED - Proceeding with upload');
 		setStatus('uploading');
 
-		const intent = await fetch('/api/uploads/intent', {
-			method: 'POST',
-			body: JSON.stringify({
-				filename: file.name,
-				type: file.type,
-				size: file.size,
-			}),
-		}).then((r) => r.json());
+		try {
+			// Get upload intent
+			const intent = await fetch('/api/uploads/intent', {
+				method: 'POST',
+				body: JSON.stringify({
+					filename: file.name,
+					type: file.type,
+					size: file.size,
+				}),
+			}).then((r) => r.json());
 
-		// ✅ get USER access token
-		const supa = supabaseClient();
-		const {
-			data: { session },
-		} = await supa.auth.getSession();
-		if (!session?.access_token) {
-			alert('You must be signed in to upload.');
-			setStatus('idle');
-			return;
-		}
+			if (intent.error) {
+				throw new Error(intent.error);
+			}
 
-		const upload = new Upload(file, {
-			endpoint: intent.tusEndpoint as string,
-			headers: {
-				authorization: `Bearer ${session.access_token}`,
-				'x-upsert': 'true', // optional but recommended
-			},
-			// TUS requires metadata keys; tus-js-client will base64 values for us.
-			metadata: {
-				bucketName: intent.bucket,
-				objectName: intent.objectPath,
-				contentType: file.type || 'video/mp4',
-				cacheControl: '3600',
-			},
-			retryDelays: [0, 1000, 3000, 5000],
-			onError: (e) => {
-				console.error(e);
-				alert(e.message);
-				setStatus('idle');
-			},
-			onProgress: (bytesUploaded, bytesTotal) => {
-				setBytes({ up: bytesUploaded, total: bytesTotal });
-				setProgress(Math.floor((bytesUploaded / bytesTotal) * 100));
-			},
-			onSuccess: async () => {
-				await fetch('/api/uploads/complete', {
-					method: 'POST',
-					body: JSON.stringify({
-						videoId: intent.videoId,
-						size: file.size,
-						type: file.type,
-					}),
+			// Add this right before the upload attempt:
+			console.log('=== UPLOAD DEBUG ===');
+			console.log('Bucket from intent:', intent.bucket);
+			console.log('Object path:', intent.objectPath);
+			console.log('File size:', file.size);
+			console.log('File type:', file.type);
+			console.log('===================');
+
+			// Upload directly to Supabase storage
+			const supa = supabaseClient();
+			const { data, error } = await supa.storage
+				.from(intent.bucket)
+				.upload(intent.objectPath, file, {
+					upsert: true,
+					contentType: file.type,
 				});
-				setStatus('done');
-				setProgress(100);
-			},
-		});
 
-		upload.start();
+			if (error) {
+				throw error;
+			}
+
+			// Update progress to show completion
+			setProgress(100);
+			setBytes({ up: file.size, total: file.size });
+
+			// Mark upload as complete
+			await fetch('/api/uploads/complete', {
+				method: 'POST',
+				body: JSON.stringify({
+					videoId: intent.videoId,
+					size: file.size,
+					type: file.type,
+				}),
+			});
+
+			setStatus('done');
+		} catch (error) {
+			console.error('Upload failed:', error);
+			alert(error instanceof Error ? error.message : 'Upload failed');
+			setStatus('idle');
+		}
 	}
 
 	function onDrop(e: React.DragEvent<HTMLDivElement>) {

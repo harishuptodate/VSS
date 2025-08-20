@@ -81,15 +81,17 @@ export default function CreateLinkForm({ videoId }: { videoId: string }) {
 					<label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
 						Private Emails
 					</label>
+
+					<p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+						Required if visibility is{' '}
+						<span className="font-medium">Private</span>
+					</p>
+
 					<input
 						name="emails"
 						placeholder="email1@example.com, email2@example.com"
 						className="w-full h-12 px-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
 					/>
-					<p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-						Required if visibility is{' '}
-						<span className="font-medium">Private</span>
-					</p>
 				</div>
 
 				{/* Submit Button - Fixed Width */}
