@@ -32,36 +32,6 @@ export async function POST(req: Request) {
   });
   
   await enqueueGenerateThumbs(video.id);
-  const videoData = await getVideo(video.id);
-  console.log(videoData);
   return NextResponse.json({ ok: true });
 }
-  async function getVideo(videoId: string): Promise<VideoRow | null> {
-    // console.log('[lambda] getVideo: querying for videoId:', videoId);
   
-    const { data, error } = await supabase
-      .from("Video")
-      .select('id,userId,objectPath,status')
-      .eq("id", videoId)
-      .maybeSingle();
-  
-    console.log('[lambda] getVideo: result:', { data, error });
-  
-    if (error) {
-      console.error('[lambda] getVideo: database error:', error);
-      throw new Error(`Database error: ${JSON.stringify(error)}`);
-    }
-  
-    if (!data) {
-      console.log('[lambda] getVideo: no video found for ID:', videoId);
-      return null;
-    }
-  
-    console.log('[lambda] getVideo: found video:', {
-      id: data.id,
-      status: data.status,
-    });
-    return data as VideoRow;
-  }
-
-
