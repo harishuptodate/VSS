@@ -100,7 +100,7 @@ export default function UploadDrop() {
 				onSuccess: async () => {
 					console.log('✅ TUS upload completed successfully');
 
-					// Mark upload as complete
+					// Mark upload as complete and start thumbnail generation via BullMQ queue
 					await fetch('/api/uploads/complete', {
 						method: 'POST',
 						body: JSON.stringify({

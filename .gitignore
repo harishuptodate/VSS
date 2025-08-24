@@ -19,6 +19,11 @@
 
 # production
 /build
+dist/
+*.zip
+node_modules
+edgeFunc/node_modules
+layer-ffmpeg*
 
 # misc
 .DS_Store
